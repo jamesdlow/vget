@@ -28,6 +28,10 @@ import com.github.axet.wget.info.ex.DownloadInterruptedError;
 import com.github.axet.wget.info.ex.DownloadMultipartError;
 import com.github.axet.wget.info.ex.DownloadRetry;
 
+import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.ThreadManager;
+import com.google.appengine.tools.development.testing.*;
+
 public class VGet {
 
     VideoInfo info;
@@ -91,6 +95,22 @@ public class VGet {
             }
         });
     }
+    
+    public void initAppEngine() {
+		try {
+			Entity entity = new Entity("test");
+		} catch (NullPointerException e) {
+			LocalServiceTestHelper helper = new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
+			helper.setUp();
+		}
+    }
+    
+    public void runThread(Runnable notify) {
+    	initAppEngine();
+		ThreadManager tm = new ThreadManager();
+		Thread thread = tm.createThreadForCurrentRequest(notify);
+		thread.run();
+    }
 
     /**
      * Drop all foribiden characters from filename
@@ -149,7 +169,8 @@ public class VGet {
                     throw new DownloadInterruptedError("interrupted");
 
                 info.setDelay(i, e);
-                notify.run();
+                //notify.run();
+                runThread(notify);
 
                 try {
                     Thread.sleep(1000);
@@ -182,13 +203,15 @@ public class VGet {
             } catch (DownloadIOCodeError ee) {
                 if (retry(ee)) {
                     info.setState(States.RETRYING, ee);
-                    notify.run();
+                    //notify.run();
+                    runThread(notify);
                 } else {
                     throw ee;
                 }
             } catch (DownloadRetry ee) {
                 info.setState(States.RETRYING, ee);
-                notify.run();
+                //notify.run();
+                runThread(notify);
             }
         }
     }
@@ -292,7 +315,8 @@ public class VGet {
                     user = parser(user, info.getWeb());
                     user.info(info, stop, notify);
                     info.setState(States.EXTRACTING_DONE);
-                    notify.run();
+                    //notify.run();
+                    runThread(notify);
                 }
                 return;
             } catch (DownloadRetry e) {
@@ -405,11 +429,13 @@ public class VGet {
                             switch (dinfo.getState()) {
                             case DOWNLOADING:
                                 info.setState(States.DOWNLOADING);
-                                notify.run();
+                                //notify.run();
+                                runThread(notify);
                                 break;
                             case RETRYING:
                                 info.setDelay(dinfo.getDelay(), dinfo.getException());
-                                notify.run();
+                                //notify.run();
+                                runThread(notify);
                                 break;
                             default:
                                 // we can safely skip all statues. (extracting -
@@ -421,7 +447,8 @@ public class VGet {
                     });
 
                     info.setState(States.DONE);
-                    notify.run();
+                    //notify.run();
+                    runThread(notify);
 
                     // break while()
                     return;
@@ -442,12 +469,14 @@ public class VGet {
             }
         } catch (DownloadInterruptedError e) {
             info.setState(VideoInfo.States.STOP, e);
-            notify.run();
+            //notify.run();
+            runThread(notify);
 
             throw e;
         } catch (RuntimeException e) {
             info.setState(VideoInfo.States.ERROR, e);
-            notify.run();
+            //notify.run();
+            runThread(notify);
 
             throw e;
         }
